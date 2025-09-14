@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import mermaid from "mermaid";
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
@@ -252,18 +252,6 @@ function MermaidRenderer({ code, onRender, containerRef, height = '70vh', compac
 }
 
 // Helpers
-const copy = async (text: string) => {
-  try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
-};
-
-function downloadSvg(name: string, svg: string) {
-  const blob = new Blob([svg], { type: "image/svg+xml" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = `${name}.svg`;
-  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-}
-
 async function svgToPngDataUrl(svgString: string) {
   // Create a temporary div to render the SVG
   const tempDiv = document.createElement('div');
@@ -289,50 +277,6 @@ async function svgToPngDataUrl(svgString: string) {
   } finally {
     document.body.removeChild(tempDiv);
   }
-}
-
-async function downloadPdf(name: string, svg: string) {
-  if (!svg) {
-    alert('Please wait for the diagram to load before exporting.');
-    return;
-  }
-  
-  try {
-    const { dataUrl, width, height } = await svgToPngDataUrl(svg);
-    const pageW = 842; // A4 landscape width in pt
-    const pageH = 595; // A4 landscape height in pt
-    const pdf = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-    
-    // Fit image within margins
-    const margin = 24;
-    const maxW = pageW - margin * 2;
-    const maxH = pageH - margin * 2;
-    const scale = Math.min(maxW / width, maxH / height);
-    const w = width * scale;
-    const h = height * scale;
-    const x = (pageW - w) / 2;
-    const y = (pageH - h) / 2;
-    
-    pdf.addImage(dataUrl, "PNG", x, y, w, h);
-    pdf.save(`${name}.pdf`);
-  } catch (error) {
-    console.error('Error generating PDF:', error);
-    alert('Error generating PDF. Please try again.');
-  }
-}
-
-async function downloadAllSvgsZip(diagrams: Diagram[]) {
-  const { default: JSZip } = await import("jszip");
-  const zip = new JSZip();
-  for (const d of diagrams) {
-    const id = `zip_${Math.random().toString(36).slice(2)}`;
-    const { svg } = await mermaid.render(id, d.code);
-    zip.file(`${d.title.replaceAll(" ", "_")}.svg`, svg);
-  }
-  const blob = await zip.generateAsync({ type: "blob" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = "alie-network-uml_svgs.zip"; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 }
 
 // Gallery exporters (all diagrams)
@@ -366,33 +310,6 @@ async function exportAllSvgsZipGallery() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = 'one-ai-uml_svgs.zip'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-}
-
-async function downloadAllPdf(diagrams: Diagram[]) {
-  try {
-    const pdf = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-    let first = true;
-    
-    for (const d of diagrams) {
-      const { svg } = await mermaid.render(`pdf_${Math.random().toString(36).slice(2)}`, d.code);
-      const { dataUrl, width, height } = await svgToPngDataUrl(svg);
-      const pageW = 842, pageH = 595, margin = 24;
-      const maxW = pageW - margin * 2, maxH = pageH - margin * 2;
-      const scale = Math.min(maxW / width, maxH / height);
-      const w = width * scale, h = height * scale;
-      const x = (pageW - w) / 2, y = (pageH - h) / 2;
-      
-      if (!first) pdf.addPage("a4", "landscape");
-      first = false;
-      pdf.addImage(dataUrl, "PNG", x, y, w, h);
-      pdf.text(d.title, margin, pageH - 8);
-    }
-    
-    pdf.save("alie-network-uml.pdf");
-  } catch (error) {
-    console.error('Error generating PDF:', error);
-    alert('Error generating PDF. Please try again.');
-  }
 }
 
 // Global class for warning blocks
@@ -467,92 +384,7 @@ const diagrams: Diagram[] = [
   },
 ];
 
-interface SidebarProps {
-  items: Diagram[];
-  currentId: string;
-  onSelect: (diagram: Diagram) => void;
-}
-
-function Sidebar({ items, currentId, onSelect }: SidebarProps) {
-  const groups = useMemo(() => {
-    const m = new Map<string, Diagram[]>();
-    items.forEach((d) => { if (!m.has(d.group)) m.set(d.group, []); m.get(d.group)!.push(d); });
-    return Array.from(m.entries());
-  }, [items]);
-  return (
-    <aside className="w-full lg:w-80 shrink-0">
-      <div className="rounded-xl bg-white border border-gray-200 shadow-md overflow-hidden">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 px-4 py-3">
-          <h2 className="text-white font-bold text-sm">UML Diagrams</h2>
-          <div className="text-xs text-indigo-100 mt-1">{diagrams.length} diagrams in {groups.length} categories</div>
-        </div>
-        
-        {/* Navigation */}
-        <nav className="max-h-[calc(100vh-280px)] overflow-y-auto divide-y divide-gray-100">
-          {groups.map(([group, ds], groupIndex) => (
-            <details key={group} className="group" open={ds.some(d => d.id === currentId)}>
-              <summary className="flex items-center gap-2 px-4 py-3 bg-white cursor-pointer list-none select-none">
-                <span className="w-5 h-5 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-[10px] flex items-center justify-center font-bold">
-                  {groupIndex + 1}
-                </span>
-                <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
-                  {group}
-                </span>
-                <span className="ml-auto text-gray-400 group-open:rotate-180 transition-transform">▾</span>
-              </summary>
-              <ul className="px-2 pb-3 space-y-1">
-                {ds.map((d) => (
-                  <li key={d.id}>
-                    <button
-                      onClick={() => onSelect(d)}
-                      className={`w-full text-left px-3 py-2 rounded-md text-xs font-medium transition-all duration-200 ${
-                        currentId === d.id
-                          ? "bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-sm"
-                          : "hover:bg-indigo-50 text-gray-700 hover:text-indigo-700"
-                      }`}
-                    >
-                      {d.title}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          ))}
-        </nav>
-      </div>
-    </aside>
-  );
-}
-
-function MobilePicker({ items, currentId, onSelect }: SidebarProps) {
-  return (
-    <div className="lg:hidden">
-      <label className="block text-xs font-semibold text-gray-600 mb-1">Select Diagram</label>
-      <select
-        className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
-        value={currentId}
-        onChange={(e) => {
-          const d = items.flatMap(i => i).find(diag => diag.id === e.target.value);
-          const found = items.find(i => i.id === e.target.value);
-          const all: Diagram[] = items.reduce((a, b) => a.concat(b as any), [] as any);
-          const picked = all.find(diag => diag.id === e.target.value);
-          if (picked) onSelect(picked);
-        }}
-      >
-        {items.map((d) => (
-          <option key={d.id} value={d.id}>{d.title}</option>
-        ))}
-      </select>
-    </div>
-  );
-}
-
 export default function App() {
-  const [selected, setSelected] = useState(diagrams[0]);
-  const [svg, setSvg] = useState("");
-  const containerRef = useRef<HTMLDivElement | null>(null);
-
   return (
     <div className="min-h-screen w-full bg-[#f6f7f9]">
       {/* Header similar to provided HTML */}
