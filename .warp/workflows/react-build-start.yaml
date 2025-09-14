@@ -1,0 +1,4 @@
+name: React Build & Start
+command: npm run build && npm start
+tags: ["react", "build", "production"]
+description: React uygulamasını build eder ve production modunda başlatır.

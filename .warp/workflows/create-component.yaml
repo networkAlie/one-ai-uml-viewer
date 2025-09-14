@@ -1,0 +1,7 @@
+name: Create React Component
+command: mkdir -p src/components/{{component_name}} && echo "import React from 'react';\n\nconst {{component_name}} = () => {\n  return (\n    <div>\n      <h1>{{component_name}}</h1>\n    </div>\n  );\n};\n\nexport default {{component_name}};" > src/components/{{component_name}}/{{component_name}}.jsx
+tags: ["react", "component", "create"]
+description: Yeni React component oluşturur.
+arguments:
+  - name: component_name
+    description: Component adı (PascalCase)
